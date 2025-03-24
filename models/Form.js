@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 
+// Check if the model is already defined to prevent overwriting
 const FormSchema = new mongoose.Schema({
   formId: {
     type: String,
@@ -7,26 +8,16 @@ const FormSchema = new mongoose.Schema({
     unique: true
   },
   formData: {
-    name: String,
-    email: String,
-    phone: String,
-    commission: String,
-    monthlySalary: String,
-    networks: String,
-    trafficSources: String,
-    verticals: String,
-    kpiGoals: String,
-    // ... other form fields
+    type: Object,
+    required: true
   },
   c2fSignature: {
-    name: String,
-    title: String,
-    signature: String,
-    date: String
+    type: Object,
+    required: true
   },
   contractorSignature: {
-    signature: String,
-    date: String
+    type: Object,
+    default: null
   },
   status: {
     type: String,
@@ -47,4 +38,7 @@ const FormSchema = new mongoose.Schema({
   }
 });
 
-export default mongoose.models.Form || mongoose.model('Form', FormSchema); 
+// Use mongoose.models.Form || mongoose.model('Form', FormSchema) pattern
+const Form = mongoose.models.Form || mongoose.model('Form', FormSchema);
+
+export default Form; 

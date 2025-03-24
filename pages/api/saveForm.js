@@ -8,12 +8,27 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  console.log('Starting form save process...'); // Debug log
+
   try {
+    console.log('Connecting to MongoDB...'); // Debug log
     await dbConnect();
-    
+    console.log('MongoDB connected'); // Debug log
+
     const formId = nanoid();
     const { formData, c2fSignature } = req.body;
 
+    // Validate required data
+    if (!formData || !c2fSignature) {
+      console.error('Missing required data:', { formData: !!formData, c2fSignature: !!c2fSignature });
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required form data or signature'
+      });
+    }
+
+    console.log('Creating form document...'); // Debug log
+    
     // Create new form document
     const form = new Form({
       formId,
@@ -22,15 +37,15 @@ export default async function handler(req, res) {
       status: 'awaiting_signature'
     });
 
+    console.log('Saving form to database...'); // Debug log
     await form.save();
+    console.log('Form saved successfully'); // Debug log
 
-    // Use the Vercel deployment URL directly
     const baseUrl = 'https://media-buyer-onboarding.vercel.app';
-    console.log('Using base URL:', baseUrl);
-
     const signatureLink = `${baseUrl}/sign/${formId}`;
-    console.log('Generated signature link:', signatureLink);
 
+    console.log('Sending email...'); // Debug log
+    
     // Send email to contractor
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
     
@@ -54,6 +69,7 @@ export default async function handler(req, res) {
     };
 
     await sgMail.send(msg);
+    console.log('Email sent successfully'); // Debug log
 
     res.status(200).json({ 
       success: true,
@@ -62,11 +78,21 @@ export default async function handler(req, res) {
       signatureLink
     });
   } catch (error) {
-    console.error('Save form error:', error);
+    console.error('Detailed save form error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code
+    });
+    
     res.status(500).json({ 
       success: false, 
       message: 'Failed to save form',
-      error: error.message 
+      error: error.message,
+      errorDetails: {
+        name: error.name,
+        code: error.code
+      }
     });
   }
 } 
