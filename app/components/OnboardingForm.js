@@ -123,6 +123,13 @@ export default function OnboardingForm() {
     appendixSignature: ""
   });
 
+  const [signatureStatus, setSignatureStatus] = useState({
+    nickSigned: false,
+    contractorSigned: false,
+    formId: null,
+    signatureLink: null
+  });
+
   const trafficSources = [
     "Facebook",
     "Google",
@@ -387,6 +394,45 @@ export default function OnboardingForm() {
         ...prev,
         error: "Failed to download PDF. Please try again."
       }));
+    }
+  };
+
+  const handleInitialSubmit = async (e) => {
+    e.preventDefault();
+    setStatus({ loading: true, error: null });
+
+    try {
+      const response = await fetch('/api/saveForm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          formData,
+          c2fSignature
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to save form');
+      }
+
+      setSignatureStatus({
+        nickSigned: true,
+        contractorSigned: false,
+        formId: data.formId,
+        signatureLink: data.signatureLink
+      });
+
+      setStatus({ loading: false, success: true });
+    } catch (error) {
+      console.error('Submission error:', error);
+      setStatus({ 
+        loading: false, 
+        error: error.message || 'Failed to save form'
+      });
     }
   };
 
@@ -1061,17 +1107,27 @@ export default function OnboardingForm() {
               </div>
             </section>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={status.loading}
-              className={`w-full p-3 rounded text-white font-medium
-                ${(status.loading)
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-red-600 hover:bg-red-700 transition-colors'}`}
-            >
-              {status.loading ? 'Submitting...' : 'Submit'}
-            </button>
+            {/* Submit Buttons Section */}
+            <div className="space-y-4">
+              {!signatureStatus.nickSigned ? (
+                <button
+                  type="button"
+                  onClick={handleInitialSubmit}
+                  disabled={status.loading}
+                  className={`w-full p-3 rounded text-white font-medium
+                    ${(status.loading)
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-red-600 hover:bg-red-700 transition-colors'}`}
+                >
+                  {status.loading ? 'Saving...' : 'Save and Send for Signature'}
+                </button>
+              ) : (
+                <div className="text-center space-y-2">
+                  <p className="text-green-600">Form saved and sent to contractor for signature</p>
+                  <p className="text-sm text-gray-600">Signature link: {signatureStatus.signatureLink}</p>
+                </div>
+              )}
+            </div>
           </form>
         </div>
       </div>
