@@ -115,94 +115,27 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Contract has already been signed' });
     }
 
-    // Update form with contractor signature
+    // Just update form with contractor signature
     try {
       form.contractorSignature = { signature, date };
       form.status = 'completed';
       await form.save();
       console.log('Form updated successfully');
+
+      // Return success with redirect URL
+      res.status(200).json({ 
+        message: 'Contract signed successfully',
+        redirectUrl: `/generate-pdf/${formId}` // New page we'll create for PDF generation
+      });
     } catch (dbError) {
       console.error('Database update error:', dbError);
       throw new Error('Failed to update form in database');
     }
-
-    // Generate PDF with fallback
-    console.log('Starting PDF generation');
-    let pdfBase64;
-    try {
-      pdfBase64 = await generatePrimaryPDF(form, signature, date);
-      console.log('Primary PDF generation successful');
-    } catch (pdfError) {
-      console.error('Primary PDF generation failed, trying backup method:', pdfError);
-      try {
-        pdfBase64 = await generateBackupPDF(form, signature, date);
-        console.log('Backup PDF generation successful');
-      } catch (backupError) {
-        console.error('Backup PDF generation failed:', backupError);
-        throw new Error('Failed to generate PDF using both primary and backup methods');
-      }
-    }
-
-    // Send confirmation emails with PDF attachment
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    
-    const emails = [
-      {
-        to: form.formData.email,
-        subject: 'Your Signed Media Buyer Contract',
-        html: `
-          <h2>Contract Signed Successfully</h2>
-          <p>Dear ${form.formData.name},</p>
-          <p>Your Media Buyer Contract has been signed successfully. Please find the signed contract attached.</p>
-          <p>Welcome to Convert 2 Freedom!</p>
-        `,
-        attachments: [{
-          content: pdfBase64,
-          filename: 'Media_Buyer_Contract.pdf',
-          type: 'application/pdf',
-          disposition: 'attachment'
-        }]
-      },
-      {
-        to: 'partners@convert2freedom.com',
-        subject: `Media Buyer Contract Signed - ${form.formData.name}`,
-        html: `
-          <h2>New Contract Signed</h2>
-          <p>The Media Buyer Contract for ${form.formData.name} has been signed. Please find the signed contract attached.</p>
-        `,
-        attachments: [{
-          content: pdfBase64,
-          filename: `Media_Buyer_Contract_${form.formData.name.replace(/\s+/g, '_')}.pdf`,
-          type: 'application/pdf',
-          disposition: 'attachment'
-        }]
-      }
-    ];
-
-    console.log('Sending emails');
-    for (const email of emails) {
-      try {
-        await sgMail.send({
-          ...email,
-          from: {
-            email: 'partners@convert2freedom.com',
-            name: 'Nick Torson'
-          }
-        });
-        console.log('Email sent successfully to:', email.to);
-      } catch (emailError) {
-        console.error('Email send error:', emailError);
-        throw new Error(`Failed to send email to ${email.to}: ${emailError.message}`);
-      }
-    }
-
-    res.status(200).json({ message: 'Contract finalized successfully' });
   } catch (error) {
     console.error('Contract finalization error:', error);
     res.status(500).json({ 
       message: 'Failed to finalize contract', 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: error.message
     });
   }
 } 

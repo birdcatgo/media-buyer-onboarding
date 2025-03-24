@@ -73,6 +73,11 @@ export default function SignaturePage() {
       }
 
       setSuccess(true);
+      
+      // Redirect to PDF generation page
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      }
     } catch (err) {
       setError(err.message);
     } finally {
