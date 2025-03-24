@@ -30,52 +30,113 @@ export default async function handler(req, res) {
           <p><strong>Email:</strong> ${form.formData.email}</p>
           <p><strong>Start Date:</strong> ${form.formData.contractDetails?.startDate || form.contractorSignature.date}</p>
           <p><strong>Commission:</strong> ${form.formData.commission}</p>
-          <p><strong>Monthly Salary:</strong> ${form.formData.monthlySalary || 'N/A'}</p>
         </div>
 
         <div style="margin: 20px 0;">
           <h3>1. SERVICES</h3>
-          <p>The Contractor will provide media buying services to the Company, including but not limited to:</p>
+          <p>The Contractor agrees to provide media buying services for the Company. These services include:</p>
           <ul>
-            <li>Creating and managing paid advertising campaigns</li>
-            <li>Monitoring and optimizing campaign performance</li>
-            <li>Providing regular reports and analysis</li>
-            <li>Maintaining communication with the Company regarding campaign status</li>
+            <li>Managing and optimizing paid advertising campaigns across multiple platforms</li>
+            <li>Creating and implementing media buying strategies aligned with company goals</li>
+            <li>Conducting market research and competitor analysis</li>
+            <li>Monitoring campaign performance and making data-driven optimizations</li>
+            <li>Providing detailed reports on campaign performance and ROI</li>
+            <li>Managing advertising budgets effectively</li>
+            <li>Identifying and targeting relevant audience segments</li>
+            <li>Maintaining up-to-date knowledge of industry trends and best practices</li>
           </ul>
+          <p>The Contractor shall perform these services with professional skill and diligence, maintaining regular communication with the Company regarding campaign status and performance.</p>
         </div>
 
         <div style="margin: 20px 0;">
           <h3>2. COMPENSATION</h3>
-          <p>The Contractor will be compensated as follows:</p>
-          <ul>
-            <li>Monthly Salary: ${form.formData.monthlySalary || 'N/A'}</li>
-            <li>Commission Structure: ${form.formData.commission}</li>
-          </ul>
+          <p>2.1 Base Compensation</p>
+          <p>The Contractor shall receive a monthly salary of ${form.formData.monthlySalary || 'N/A'}.</p>
+          
+          <p>2.2 Commission Structure</p>
+          <p>${form.formData.commission}</p>
+          
+          <p>2.3 Payment Terms</p>
+          <p>Payments will be made monthly, with commissions calculated and paid based on the previous month's performance. All payments are subject to the Contractor submitting accurate and timely reports of their activities.</p>
         </div>
 
         <div style="margin: 20px 0;">
           <h3>3. TERM AND TERMINATION</h3>
-          <p>This agreement commences on ${form.formData.contractDetails?.startDate || form.contractorSignature.date} and continues until terminated by either party with written notice.</p>
+          <p>3.1 Term</p>
+          <p>This Agreement shall commence on ${form.formData.contractDetails?.startDate || form.contractorSignature.date} and shall continue until terminated by either party as provided herein.</p>
+          
+          <p>3.2 Termination</p>
+          <p>Either party may terminate this Agreement with thirty (30) days written notice to the other party. The Company may terminate this Agreement immediately for cause, including but not limited to:</p>
+          <ul>
+            <li>Breach of any material term of this Agreement</li>
+            <li>Failure to perform services as required</li>
+            <li>Violation of Company policies or procedures</li>
+            <li>Engaging in conduct harmful to the Company's interests</li>
+          </ul>
         </div>
 
         <div style="margin: 20px 0;">
           <h3>4. CONFIDENTIALITY</h3>
-          <p>The Contractor agrees to maintain the confidentiality of all Company information and trade secrets during and after the term of this agreement.</p>
+          <p>4.1 Definition</p>
+          <p>Confidential Information includes all information, whether written, oral, or electronic, relating to the Company's business, including but not limited to:</p>
+          <ul>
+            <li>Marketing strategies and plans</li>
+            <li>Customer and client information</li>
+            <li>Financial data and projections</li>
+            <li>Trade secrets and proprietary information</li>
+            <li>Operating procedures and methods</li>
+            <li>Technical information and know-how</li>
+          </ul>
+          
+          <p>4.2 Obligations</p>
+          <p>The Contractor agrees to:</p>
+          <ul>
+            <li>Maintain strict confidentiality of all Confidential Information</li>
+            <li>Use Confidential Information solely for performing services under this Agreement</li>
+            <li>Not disclose Confidential Information to any third party without prior written consent</li>
+            <li>Return or destroy all Confidential Information upon termination of this Agreement</li>
+          </ul>
+          
+          <p>4.3 Duration</p>
+          <p>The confidentiality obligations shall survive the termination of this Agreement indefinitely.</p>
         </div>
 
         <div style="margin: 20px 0;">
           <h3>5. INTELLECTUAL PROPERTY</h3>
-          <p>All work product created by the Contractor during the term of this agreement shall be the sole property of the Company.</p>
+          <p>5.1 Ownership</p>
+          <p>All work product, including but not limited to advertising campaigns, creative materials, strategies, and analyses created by the Contractor during the term of this Agreement shall be the sole and exclusive property of the Company.</p>
+          
+          <p>5.2 Assignment</p>
+          <p>The Contractor hereby assigns to the Company all right, title, and interest in any intellectual property created in the course of providing services under this Agreement.</p>
         </div>
 
         <div style="margin: 20px 0;">
           <h3>6. NON-COMPETE</h3>
-          <p>The Contractor agrees not to engage in competing business activities during the term of this agreement and for 12 months following termination.</p>
+          <p>6.1 Duration and Scope</p>
+          <p>During the term of this Agreement and for twelve (12) months following its termination, the Contractor agrees not to:</p>
+          <ul>
+            <li>Engage in any business directly competing with the Company</li>
+            <li>Solicit any clients or customers of the Company</li>
+            <li>Provide similar services to competing businesses in the same market</li>
+          </ul>
+          
+          <p>6.2 Geographic Area</p>
+          <p>This non-compete provision applies to all territories where the Company conducts business.</p>
         </div>
 
         <div style="margin: 20px 0;">
           <h3>7. INDEPENDENT CONTRACTOR STATUS</h3>
-          <p>This agreement does not create an employer-employee relationship. The Contractor is an independent contractor responsible for their own taxes and insurance.</p>
+          <p>7.1 Relationship</p>
+          <p>The Contractor is an independent contractor and not an employee of the Company. Nothing in this Agreement shall be construed as creating an employer-employee relationship.</p>
+          
+          <p>7.2 Responsibilities</p>
+          <p>The Contractor is responsible for:</p>
+          <ul>
+            <li>Payment of all applicable taxes</li>
+            <li>Providing their own insurance coverage</li>
+            <li>Maintaining their own business licenses and permits</li>
+            <li>Providing their own equipment and materials</li>
+          </ul>
         </div>
 
         <div style="margin: 20px 0; border-top: 1px solid #000; padding-top: 20px;">
