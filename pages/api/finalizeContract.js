@@ -1,24 +1,28 @@
 import dbConnect from '../../lib/mongodb';
 import Form from '../../models/Form';
 import sgMail from '@sendgrid/mail';
-import puppeteer from 'puppeteer';
+import chromium from 'chrome-aws-lambda';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  let browser = null;
+
   try {
     await dbConnect();
     
     const { formId, signature, date } = req.body;
-    console.log('Finalizing contract:', formId);
+    console.log('Starting contract finalization for:', formId);
 
     if (!formId || !signature) {
+      console.log('Missing required fields:', { formId, signature });
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
     const form = await Form.findOne({ formId });
+    console.log('Form found:', form ? 'yes' : 'no');
     
     if (!form) {
       return res.status(404).json({ message: 'Form not found' });
@@ -29,23 +33,56 @@ export default async function handler(req, res) {
     }
 
     // Update form with contractor signature
-    form.contractorSignature = { signature, date };
-    form.status = 'completed';
-    await form.save();
+    try {
+      form.contractorSignature = { signature, date };
+      form.status = 'completed';
+      await form.save();
+      console.log('Form updated successfully');
+    } catch (dbError) {
+      console.error('Database update error:', dbError);
+      throw new Error('Failed to update form in database');
+    }
 
     // Generate PDF
-    const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+    console.log('Starting PDF generation');
+    browser = await chromium.puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath,
+      headless: true,
+    });
+
     const page = await browser.newPage();
 
     const contractHtml = `
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="UTF-8">
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; padding: 40px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .section { margin-bottom: 20px; }
-          .signature { margin-top: 40px; border-top: 1px solid #000; padding-top: 10px; }
+          body { 
+            font-family: Arial, sans-serif; 
+            line-height: 1.6; 
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+          }
+          .section { 
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+          }
+          .signature { 
+            margin-top: 40px;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+            page-break-inside: avoid;
+          }
         </style>
       </head>
       <body>
@@ -56,10 +93,10 @@ export default async function handler(req, res) {
 
         <div class="section">
           <h3>Contractor Information</h3>
-          <p>Name: ${form.formData.name}</p>
-          <p>Email: ${form.formData.email}</p>
-          <p>Start Date: ${form.formData.contractDetails?.startDate}</p>
-          <p>Commission: ${form.formData.commission}</p>
+          <p><strong>Name:</strong> ${form.formData.name}</p>
+          <p><strong>Email:</strong> ${form.formData.email}</p>
+          <p><strong>Start Date:</strong> ${form.formData.contractDetails?.startDate || date}</p>
+          <p><strong>Commission:</strong> ${form.formData.commission}</p>
         </div>
 
         <div class="section">
@@ -80,16 +117,19 @@ export default async function handler(req, res) {
       </html>
     `;
 
-    await page.setContent(contractHtml);
+    await page.setContent(contractHtml, { waitUntil: 'networkidle0' });
+    console.log('PDF content set');
+
     const pdfBuffer = await page.pdf({
       format: 'A4',
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+      printBackground: true
     });
-
-    await browser.close();
+    console.log('PDF generated');
 
     // Convert PDF buffer to base64
     const pdfBase64 = pdfBuffer.toString('base64');
+    console.log('PDF converted to base64');
 
     // Send confirmation emails with PDF attachment
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -127,19 +167,35 @@ export default async function handler(req, res) {
       }
     ];
 
+    console.log('Sending emails');
     for (const email of emails) {
-      await sgMail.send({
-        ...email,
-        from: {
-          email: 'partners@convert2freedom.com',
-          name: 'Nick Torson'
-        }
-      });
+      try {
+        await sgMail.send({
+          ...email,
+          from: {
+            email: 'partners@convert2freedom.com',
+            name: 'Nick Torson'
+          }
+        });
+        console.log('Email sent successfully to:', email.to);
+      } catch (emailError) {
+        console.error('Email send error:', emailError);
+        throw new Error(`Failed to send email to ${email.to}`);
+      }
     }
 
     res.status(200).json({ message: 'Contract finalized successfully' });
   } catch (error) {
-    console.error('Finalize contract error:', error);
-    res.status(500).json({ message: 'Failed to finalize contract', error: error.message });
+    console.error('Contract finalization error:', error);
+    res.status(500).json({ 
+      message: 'Failed to finalize contract', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  } finally {
+    if (browser) {
+      await browser.close();
+      console.log('Browser closed');
+    }
   }
 } 
