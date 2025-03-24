@@ -1,7 +1,6 @@
 import dbConnect from '../../lib/mongodb';
 import Form from '../../models/Form';
 import sgMail from '@sendgrid/mail';
-import { jsPDF } from 'jspdf';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,44 +10,47 @@ export default async function handler(req, res) {
   try {
     await dbConnect();
     const { formId } = req.body;
+    console.log('Processing formId:', formId);
 
     const form = await Form.findOne({ formId });
     if (!form) {
+      console.log('Form not found:', formId);
       return res.status(404).json({ message: 'Form not found' });
     }
 
-    // Generate PDF
-    const doc = new jsPDF();
-    
-    // Add content to PDF
-    doc.setFontSize(20);
-    doc.text('Media Buyer Contract', 105, 20, { align: 'center' });
-    doc.setFontSize(16);
-    doc.text('Convert 2 Freedom', 105, 30, { align: 'center' });
-    
-    doc.setFontSize(12);
-    doc.text('Contractor Information', 20, 50);
-    doc.text(`Name: ${form.formData.name}`, 20, 60);
-    doc.text(`Email: ${form.formData.email}`, 20, 70);
-    doc.text(`Start Date: ${form.formData.contractDetails?.startDate || form.contractorSignature.date}`, 20, 80);
-    doc.text(`Commission: ${form.formData.commission}`, 20, 90);
+    // Create HTML content for the email
+    const contractHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1 style="text-align: center;">Media Buyer Contract</h1>
+        <h2 style="text-align: center;">Convert 2 Freedom</h2>
+        
+        <div style="margin: 20px 0;">
+          <h3>Contractor Information</h3>
+          <p><strong>Name:</strong> ${form.formData.name}</p>
+          <p><strong>Email:</strong> ${form.formData.email}</p>
+          <p><strong>Start Date:</strong> ${form.formData.contractDetails?.startDate || form.contractorSignature.date}</p>
+          <p><strong>Commission:</strong> ${form.formData.commission}</p>
+        </div>
 
-    doc.text('Contract Terms', 20, 110);
-    const terms = doc.splitTextToSize(form.formData.contractTerms || '', 170);
-    doc.text(terms, 20, 120);
+        <div style="margin: 20px 0;">
+          <h3>Contract Terms</h3>
+          <p>${form.formData.contractTerms || ''}</p>
+        </div>
 
-    doc.text('Signatures', 20, 220);
-    doc.line(20, 225, 190, 225);
-    
-    doc.text(`Contractor Signature: ${form.contractorSignature.signature}`, 20, 235);
-    doc.text(`Date Signed: ${form.contractorSignature.date}`, 20, 245);
-    
-    doc.text('Convert 2 Freedom Representative: Nick Torson', 20, 260);
-    doc.text(`Date: ${form.formData.c2fSignatureDate || form.contractorSignature.date}`, 20, 270);
+        <div style="margin: 20px 0; border-top: 1px solid #000; padding-top: 20px;">
+          <p><strong>Contractor Signature:</strong> ${form.contractorSignature.signature}</p>
+          <p><strong>Date Signed:</strong> ${form.contractorSignature.date}</p>
+        </div>
 
-    const pdfBase64 = doc.output('base64');
+        <div style="margin: 20px 0; border-top: 1px solid #000; padding-top: 20px;">
+          <p><strong>Convert 2 Freedom Representative:</strong> Nick Torson</p>
+          <p><strong>Date:</strong> ${form.formData.c2fSignatureDate || form.contractorSignature.date}</p>
+        </div>
+      </div>
+    `;
 
     // Send emails
+    console.log('Setting up SendGrid');
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
     
     const emails = [
@@ -58,45 +60,42 @@ export default async function handler(req, res) {
         html: `
           <h2>Contract Signed Successfully</h2>
           <p>Dear ${form.formData.name},</p>
-          <p>Your Media Buyer Contract has been signed successfully. Please find the signed contract attached.</p>
+          <p>Your Media Buyer Contract has been signed successfully. The contract details are below.</p>
           <p>Welcome to Convert 2 Freedom!</p>
-        `,
-        attachments: [{
-          content: pdfBase64,
-          filename: 'Media_Buyer_Contract.pdf',
-          type: 'application/pdf',
-          disposition: 'attachment'
-        }]
+          ${contractHtml}
+        `
       },
       {
         to: 'partners@convert2freedom.com',
         subject: `Media Buyer Contract Signed - ${form.formData.name}`,
         html: `
           <h2>New Contract Signed</h2>
-          <p>The Media Buyer Contract for ${form.formData.name} has been signed. Please find the signed contract attached.</p>
-        `,
-        attachments: [{
-          content: pdfBase64,
-          filename: `Media_Buyer_Contract_${form.formData.name.replace(/\s+/g, '_')}.pdf`,
-          type: 'application/pdf',
-          disposition: 'attachment'
-        }]
+          <p>The Media Buyer Contract for ${form.formData.name} has been signed.</p>
+          ${contractHtml}
+        `
       }
     ];
 
+    console.log('Sending emails');
     for (const email of emails) {
-      await sgMail.send({
-        ...email,
-        from: {
-          email: 'partners@convert2freedom.com',
-          name: 'Nick Torson'
-        }
-      });
+      try {
+        await sgMail.send({
+          ...email,
+          from: {
+            email: 'partners@convert2freedom.com',
+            name: 'Nick Torson'
+          }
+        });
+        console.log('Email sent successfully to:', email.to);
+      } catch (emailError) {
+        console.error('Failed to send email to:', email.to, emailError);
+        throw new Error(`Failed to send email to ${email.to}: ${emailError.message}`);
+      }
     }
 
-    res.status(200).json({ message: 'PDF generated and sent successfully' });
+    res.status(200).json({ message: 'Contract sent successfully' });
   } catch (error) {
-    console.error('Generate and send PDF error:', error);
+    console.error('Contract sending error:', error);
     res.status(500).json({ 
       message: 'Failed to generate and send PDF', 
       error: error.message 
