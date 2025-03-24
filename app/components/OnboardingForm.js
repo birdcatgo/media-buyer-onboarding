@@ -265,32 +265,47 @@ export default function OnboardingForm() {
   };
 
   const generateCompressedPDF = async (element) => {
-    const html2pdf = (await import('html2pdf.js')).default;
-    const options = {
-      margin: 0.5,
-      filename: `${formData.name}-media-buyer-onboarding.pdf`,
-      image: { 
-        type: 'jpeg', 
-        quality: 0.5 
-      },
-      html2canvas: { 
-        scale: 1,
-        useCORS: true,
-        logging: false,
-        letterRendering: true
-      },
-      jsPDF: { 
-        unit: 'in', 
-        format: 'letter', 
-        orientation: 'portrait',
-        compress: true,
-        compressPDF: true,
-        precision: 16
-      }
-    };
+    try {
+      console.log('Starting PDF generation');
+      const html2pdf = (await import('html2pdf.js')).default;
+      
+      const options = {
+        margin: 0.5,
+        filename: `${formData.name}-media-buyer-onboarding.pdf`,
+        image: { 
+          type: 'jpeg', 
+          quality: 0.98 
+        },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          logging: true, // Enable logging
+          letterRendering: true,
+          allowTaint: true,
+          foreignObjectRendering: true
+        },
+        jsPDF: { 
+          unit: 'in', 
+          format: 'letter', 
+          orientation: 'portrait',
+          compress: true
+        }
+      };
 
-    const pdfBlob = await html2pdf().set(options).from(element).output('blob');
-    return pdfBlob;
+      console.log('Generating PDF with options:', options);
+      
+      const pdfBlob = await html2pdf()
+        .set(options)
+        .from(element)
+        .save()
+        .output('blob');
+      
+      console.log('PDF generated successfully');
+      return pdfBlob;
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      throw new Error(`Failed to generate PDF: ${error.message}`);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -298,15 +313,20 @@ export default function OnboardingForm() {
     setStatus({ loading: true, error: null });
 
     try {
-      // Generate PDF
+      console.log('Starting form submission');
       const element = document.getElementById('onboardingForm');
+      
+      if (!element) {
+        throw new Error('Form element not found');
+      }
+
       const pdfBlob = await generateCompressedPDF(element);
       
       // Convert PDF to base64
       const base64data = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
+        reader.onerror = (error) => reject(error);
         reader.readAsDataURL(pdfBlob);
       });
 
@@ -316,6 +336,12 @@ export default function OnboardingForm() {
         email: formData.email,
         pdfData: base64data
       };
+
+      console.log('Submitting form data', {
+        name: submissionData.name,
+        email: submissionData.email,
+        pdfSize: base64data.length
+      });
 
       // Submit form
       const response = await fetch('/api/submit', {
@@ -336,57 +362,31 @@ export default function OnboardingForm() {
       console.error('Submission error:', error);
       setStatus({ 
         loading: false, 
-        error: error.message || 'Failed to submit form'
+        error: error.message || 'Failed to generate PDF. Please try again.'
       });
     }
   };
 
   const downloadPDF = async () => {
-    // Import html2pdf only on client side when needed
-    if (typeof window !== 'undefined') {
-      const html2pdf = (await import('html2pdf.js')).default;
+    try {
       const element = document.getElementById('onboardingForm');
-      const options = {
-        margin: 1,
-        filename: `${formData.name}-media-buyer-onboarding.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-      };
-
-      try {
-        const pdfBlob = await html2pdf().set(options).from(element).output('blob');
-        const pdfBase64 = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(pdfBlob);
-        });
-
-        // Save to Google Drive
-        const driveResponse = await axios.post("/api/saveToDrive", {
-          fileName: `${formData.name}-media-buyer-onboarding.pdf`,
-          fileData: pdfBase64.split(',')[1]
-        }, {
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-
-        setStatus(prev => ({
-          ...prev,
-          success: true,
-          driveLink: driveResponse.data.viewLink
-        }));
-
-      } catch (error) {
-        console.error('Failed to generate PDF:', error);
-        setStatus(prev => ({
-          ...prev,
-          error: "Failed to generate PDF. Please try again."
-        }));
-      }
+      const pdfBlob = await generateCompressedPDF(element);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${formData.name}-media-buyer-onboarding.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      setStatus(prev => ({
+        ...prev,
+        error: "Failed to download PDF. Please try again."
+      }));
     }
   };
 

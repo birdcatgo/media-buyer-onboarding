@@ -8,6 +8,7 @@ const nextConfig = {
     }
     config.externals.push('@sendgrid/mail');
     
+    config.resolve.alias.canvas = false
     return config;
   }
 };
