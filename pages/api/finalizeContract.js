@@ -1,14 +1,12 @@
 import dbConnect from '../../lib/mongodb';
 import Form from '../../models/Form';
 import sgMail from '@sendgrid/mail';
-import chromium from 'chrome-aws-lambda';
+import html_to_pdf from 'html-pdf-node';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
-
-  let browser = null;
 
   try {
     await dbConnect();
@@ -45,15 +43,6 @@ export default async function handler(req, res) {
 
     // Generate PDF
     console.log('Starting PDF generation');
-    browser = await chromium.puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
-      headless: true,
-    });
-
-    const page = await browser.newPage();
-
     const contractHtml = `
       <!DOCTYPE html>
       <html>
@@ -75,13 +64,11 @@ export default async function handler(req, res) {
           }
           .section { 
             margin-bottom: 20px;
-            page-break-inside: avoid;
           }
           .signature { 
             margin-top: 40px;
             border-top: 1px solid #000;
             padding-top: 10px;
-            page-break-inside: avoid;
           }
         </style>
       </head>
@@ -117,14 +104,10 @@ export default async function handler(req, res) {
       </html>
     `;
 
-    await page.setContent(contractHtml, { waitUntil: 'networkidle0' });
-    console.log('PDF content set');
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-      printBackground: true
-    });
+    const options = { format: 'A4' };
+    const file = { content: contractHtml };
+    
+    const pdfBuffer = await html_to_pdf.generatePdf(file, options);
     console.log('PDF generated');
 
     // Convert PDF buffer to base64
@@ -192,10 +175,5 @@ export default async function handler(req, res) {
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
-  } finally {
-    if (browser) {
-      await browser.close();
-      console.log('Browser closed');
-    }
   }
 } 

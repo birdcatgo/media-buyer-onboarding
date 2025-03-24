@@ -19,13 +19,6 @@ const nextConfig = {
     ];
   },
   webpack: (config, { isServer }) => {
-    // Avoid bundling server-only modules
-    if (!config.externals) {
-      config.externals = [];
-    }
-    config.externals.push('@sendgrid/mail');
-    
-    config.resolve.alias.canvas = false
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -33,9 +26,6 @@ const nextConfig = {
       };
     }
     return config;
-  },
-  experimental: {
-    esmExternals: false
   }
 };
 
