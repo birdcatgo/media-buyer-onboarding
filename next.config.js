@@ -1,47 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  api: {
-    bodyParser: {
-      sizeLimit: '20mb'
-    },
-    responseLimit: false
-  },
-  experimental: {
-    largePageDataBytes: 128 * 100000
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path',
-        destination: '/api/:path/route',
-      }
-    ];
-  },
-  async headers() {
-    return [
-      {
-        source: '/api/:path*',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/json',
-          },
-          {
-            key: 'Accept',
-            value: '*/*',
-          },
-          {
-            key: 'Connection',
-            value: 'keep-alive',
-          }
-        ],
-      },
-    ];
-  },
+  reactStrictMode: true,
   webpack: (config) => {
-    config.externals = [...config.externals, 'canvas', 'jsdom'];
+    // Avoid bundling server-only modules
+    if (!config.externals) {
+      config.externals = [];
+    }
+    config.externals.push('@sendgrid/mail');
+    
     return config;
-  },
-}
+  }
+};
 
-module.exports = nextConfig 
+module.exports = nextConfig; 

@@ -13,13 +13,6 @@ export default function OnboardingForm() {
     ssn: "",
     form1099: false,
     
-    // Onboarding Checklist
-    onboardingChecks: {
-      addedToSlack: false,
-      addedToMonday: false,
-      teamIntro: false
-    },
-
     // Budget & Goals
     dailyBudget: "",
     weeklyBudget: "",
@@ -49,7 +42,7 @@ export default function OnboardingForm() {
     },
     
     // Financial
-    commission: "10%",
+    commission: "",
     paymentInfo: "",
     paymentDate: "",
     
@@ -60,6 +53,7 @@ export default function OnboardingForm() {
     contractorAgreement: {
       hasRead: false,
       signature: "",
+      appendixSignature: "",
       date: new Date().toISOString().split('T')[0], // Today's date
     },
 
@@ -99,6 +93,19 @@ export default function OnboardingForm() {
     },
 
     otherCountry: "",
+
+    // New fields for Loss Tolerance
+    lossTolerance: {
+      daily: "",
+      weekly: "",
+      lifetime: ""
+    },
+
+    budget: {
+      daily: "",
+    },
+
+    monthlySalary: "",
   });
   
   const [status, setStatus] = useState({
@@ -108,20 +115,13 @@ export default function OnboardingForm() {
     driveLink: null
   });
 
-  const [saveStatus, setSaveStatus] = useState({
-    loading: false,
-    message: null,
-    timestamp: null
-  });
-
   const [c2fSignature, setC2fSignature] = useState({
     name: "Nick Torson",
     position: "CEO",
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    signature: "",
+    appendixSignature: ""
   });
-
-  const [drafts, setDrafts] = useState([]);
-  const [showDraftsModal, setShowDraftsModal] = useState(false);
 
   const trafficSources = [
     "Facebook",
@@ -166,11 +166,6 @@ export default function OnboardingForm() {
     address: "",
     ssn: "",
     form1099: false,
-    onboardingChecks: {
-      addedToSlack: false,
-      addedToMonday: false,
-      teamIntro: false
-    },
     dailyBudget: "",
     weeklyBudget: "",
     lifetimeBudget: "",
@@ -191,13 +186,14 @@ export default function OnboardingForm() {
       teamMeeting: "",
       dailyUpdate: ""
     },
-    commission: "10%",
+    commission: "",
     paymentInfo: "",
     paymentDate: "",
     compliance: false,
     contractorAgreement: {
       hasRead: false,
       signature: "",
+      appendixSignature: "",
       date: new Date().toISOString().split('T')[0],
     },
     paymentDetails: {
@@ -229,7 +225,16 @@ export default function OnboardingForm() {
       preferredWorkingHours: "",
       unavailableTimes: ""
     },
-    otherCountry: ""
+    otherCountry: "",
+    lossTolerance: {
+      daily: "",
+      weekly: "",
+      lifetime: ""
+    },
+    budget: {
+      daily: "",
+    },
+    monthlySalary: "",
   };
 
   const handleChange = (e) => {
@@ -256,7 +261,6 @@ export default function OnboardingForm() {
     if (!formData.name.trim()) return "Name is required";
     if (!formData.email.trim()) return "Email is required";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return "Invalid email format";
-    if (!formData.compliance) return "You must agree to compliance terms";
     return null;
   };
 
@@ -291,167 +295,48 @@ export default function OnboardingForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setStatus({ loading: true, error: null, success: false });
-
-    const error = validateForm();
-    if (error) {
-      setStatus({ loading: false, error, success: false });
-      return;
-    }
+    setStatus({ loading: true, error: null });
 
     try {
-      await axios.post("/api/submit", formData);
-
-      if (typeof window !== 'undefined') {
-        const element = document.getElementById('onboardingForm');
-        const pdfBlob = await generateCompressedPDF(element);
-        
+      // Generate PDF
+      const element = document.getElementById('onboardingForm');
+      const pdfBlob = await generateCompressedPDF(element);
+      
+      // Convert PDF to base64
+      const base64data = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        
-        reader.onload = async () => {
-          const base64data = reader.result.split(',')[1];
-          
-          try {
-            console.log('Uploading file:', `${formData.name}-media-buyer-onboarding.pdf`);
-            
-            const response = await axios.post("/api/saveToDrive", {
-              fileName: `${formData.name}-media-buyer-onboarding.pdf`,
-              fileData: base64data,
-              isDraft: false
-            }, {
-              maxContentLength: Infinity,
-              maxBodyLength: Infinity,
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              timeout: 30000
-            });
-
-            console.log('Upload successful:', response.data);
-            
-            setStatus({
-              loading: false,
-              error: null,
-              success: true,
-              driveLink: response.data.viewLink
-            });
-
-            // Reset form after successful submission
-            setFormData(initialFormState);
-            localStorage.removeItem('formDraft'); // Clear saved draft
-
-          } catch (uploadError) {
-            console.error('Upload error details:', uploadError.response?.data || uploadError.message);
-            const errorMessage = uploadError.response?.data?.message === 'Google Drive setup incomplete. Please contact support.'
-              ? 'System is being configured. Please try again in a few minutes.'
-              : uploadError.response?.data?.message || "Failed to upload PDF. Please try again.";
-            
-            setStatus({
-              loading: false,
-              error: errorMessage,
-              success: false
-            });
-          }
-        };
-
-        reader.onerror = (error) => {
-          console.error('FileReader error:', error);
-          setStatus({
-            loading: false,
-            error: "Failed to process PDF. Please try again.",
-            success: false
-          });
-        };
-
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
         reader.readAsDataURL(pdfBlob);
-      }
-    } catch (error) {
-      console.error('Submission error:', error.response?.data || error.message);
-      setStatus({
-        loading: false,
-        error: error.response?.data?.message || "Failed to submit form. Please try again.",
-        success: false
       });
-    }
-  };
 
-  const saveDraft = async () => {
-    setSaveStatus({ loading: true, message: null, timestamp: null });
-    try {
-      // Create new draft object with timestamp and name
-      const newDraft = {
-        data: formData,
-        timestamp: new Date().toISOString(),
-        name: formData.name || 'Unnamed Draft'
+      // Prepare submission data
+      const submissionData = {
+        name: formData.name,
+        email: formData.email,
+        pdfData: base64data
       };
 
-      // Get existing drafts and log them
-      const existingDraftsStr = localStorage.getItem('formDrafts');
-      console.log('Existing drafts string:', existingDraftsStr);
-      const existingDrafts = JSON.parse(existingDraftsStr || '[]');
-      console.log('Existing drafts parsed:', existingDrafts);
+      // Submit form
+      const response = await fetch('/api/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData),
+      });
 
-      const updatedDrafts = [...existingDrafts, newDraft];
-      console.log('Updated drafts:', updatedDrafts);
-      
-      // Save to localStorage
-      localStorage.setItem('formDrafts', JSON.stringify(updatedDrafts));
-      setDrafts(updatedDrafts);
-
-      if (typeof window !== 'undefined') {
-        const element = document.getElementById('onboardingForm');
-        const pdfBlob = await generateCompressedPDF(element);
-        
-        const reader = new FileReader();
-        
-        reader.onload = async () => {
-          const base64data = reader.result.split(',')[1];
-          
-          try {
-            const response = await axios.post("/api/saveToDrive", {
-              fileName: `DRAFT-${formData.name}-media-buyer-onboarding.pdf`,
-              fileData: base64data,
-              isDraft: true
-            }, {
-              timeout: 30000,
-              maxContentLength: Infinity,
-              maxBodyLength: Infinity
-            });
-
-            console.log('Draft saved:', response.data);
-            
-            setSaveStatus({
-              loading: false,
-              message: `Draft saved successfully. You now have ${updatedDrafts.length} draft${updatedDrafts.length > 1 ? 's' : ''}.`,
-              timestamp: new Date().toLocaleTimeString()
-            });
-          } catch (uploadError) {
-            console.error('Save error:', uploadError.response?.data || uploadError);
-            setSaveStatus({
-              loading: false,
-              message: uploadError.response?.data?.message || 'Failed to save draft. Please try again.',
-              timestamp: new Date().toLocaleTimeString()
-            });
-          }
-        };
-
-        reader.onerror = (error) => {
-          console.error('FileReader error:', error);
-          setSaveStatus({
-            loading: false,
-            message: 'Failed to process PDF. Please try again.',
-            timestamp: new Date().toLocaleTimeString()
-          });
-        };
-
-        reader.readAsDataURL(pdfBlob);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to submit form');
       }
+
+      setStatus({ loading: false, success: true });
     } catch (error) {
-      console.error('Save draft error:', error);
-      setSaveStatus({
-        loading: false,
-        message: 'Failed to save draft. Please try again.',
-        timestamp: new Date().toLocaleTimeString()
+      console.error('Submission error:', error);
+      setStatus({ 
+        loading: false, 
+        error: error.message || 'Failed to submit form'
       });
     }
   };
@@ -505,80 +390,6 @@ export default function OnboardingForm() {
     }
   };
 
-  const deleteDraft = (index) => {
-    const updatedDrafts = drafts.filter((_, i) => i !== index);
-    localStorage.setItem('formDrafts', JSON.stringify(updatedDrafts));
-    setDrafts(updatedDrafts);
-  };
-
-  const DraftsModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold">Saved Drafts</h3>
-          <button
-            onClick={() => setShowDraftsModal(false)}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        
-        {drafts.length === 0 ? (
-          <p className="text-gray-500">No saved drafts</p>
-        ) : (
-          <div className="space-y-2">
-            {drafts.map((draft, index) => (
-              <div key={index} className="border rounded p-4 flex justify-between items-center">
-                <div>
-                  <h4 className="font-medium">{draft.name}</h4>
-                  <p className="text-sm text-gray-500">
-                    {new Date(draft.timestamp).toLocaleString()}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setFormData(draft.data);
-                      setShowDraftsModal(false);
-                    }}
-                    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    Load
-                  </button>
-                  <button
-                    onClick={() => deleteDraft(index)}
-                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  useEffect(() => {
-    // Load all drafts from localStorage
-    const savedDrafts = localStorage.getItem('formDrafts');
-    console.log('Loading drafts:', savedDrafts);
-    if (savedDrafts) {
-      const parsedDrafts = JSON.parse(savedDrafts);
-      console.log('Parsed drafts:', parsedDrafts);
-      setDrafts(parsedDrafts);
-      setSaveStatus({
-        loading: false,
-        message: `You have ${parsedDrafts.length} saved draft${parsedDrafts.length > 1 ? 's' : ''}`,
-        timestamp: null
-      });
-    }
-  }, []);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 py-12 px-4">
       {/* Add decorative elements */}
@@ -614,45 +425,6 @@ export default function OnboardingForm() {
         </div>
 
         <div className="p-6">
-          <div className="flex justify-end items-center mb-6">
-            <div className="flex items-center gap-4">
-              {/* Manage Drafts Button */}
-              <button
-                type="button"
-                onClick={() => setShowDraftsModal(true)}
-                className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg flex items-center gap-2 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
-                <span>Manage Drafts ({drafts.length})</span>
-              </button>
-
-              {saveStatus.message && (
-                <span className="text-sm text-gray-600">
-                  {saveStatus.message} {saveStatus.timestamp && `at ${saveStatus.timestamp}`}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={saveDraft}
-                disabled={saveStatus.loading}
-                className="px-4 py-2 bg-black hover:bg-gray-900 text-white rounded-lg flex items-center gap-2 transition-colors"
-              >
-                {saveStatus.loading ? (
-                  <span>Saving...</span>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" strokeWidth="2" stroke="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
-                    </svg>
-                    <span>Save Draft</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-          
           {status.success && (
             <div className="mb-4 p-4 bg-green-100 text-green-700 rounded flex justify-between items-center">
               <span>Form submitted successfully! Your PDF is being generated...</span>
@@ -676,113 +448,33 @@ export default function OnboardingForm() {
 
           <form id="onboardingForm" onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Information Section */}
-            <section className="space-y-4">
+            <div className="space-y-4">
               <h3 className="text-xl font-semibold text-gray-800 border-l-4 border-red-600 pl-3">Personal Information</h3>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Full Name *</span>
                   <input
                     type="text"
                     name="name"
-                    placeholder="John Doe"
                     value={formData.name}
                     onChange={handleChange}
-                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
                     required
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Email *</span>
                   <input
                     type="email"
                     name="email"
-                    placeholder="john@example.com"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
                     required
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    placeholder="(555) 555-5555"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Country *</label>
-                  <select
-                    name="country"
-                    value={formData.country}
-                    onChange={handleChange}
-                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  >
-                    <option value="">Select Country</option>
-                    <option value="United States">United States</option>
-                    <option value="Canada">Canada</option>
-                    <option value="United Kingdom">United Kingdom</option>
-                    <option value="Australia">Australia</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                {formData.country === "Other" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Specify Country *</label>
-                    <input
-                      type="text"
-                      name="otherCountry"
-                      placeholder="Enter your country"
-                      value={formData.otherCountry}
-                      onChange={handleChange}
-                      className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
-                  </div>
-                )}
-
-                {formData.country === "United States" && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Social Security Number *</label>
-                      <input
-                        type="password"
-                        name="ssn"
-                        placeholder="XXX-XX-XXXX"
-                        value={formData.ssn}
-                        onChange={handleChange}
-                        className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          name="form1099"
-                          checked={formData.form1099}
-                          onChange={handleChange}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        <span className="text-sm text-gray-700">Form 1099-NEC Received</span>
-                      </label>
-                    </div>
-                  </>
-                )}
+                </label>
               </div>
-            </section>
+            </div>
 
             {/* Payment and Banking Details */}
             <section className="space-y-4">
@@ -795,7 +487,7 @@ export default function OnboardingForm() {
                     <input
                       type="text"
                       name="commission"
-                      placeholder="e.g. 20%"
+                      placeholder="e.g. 10%"
                       value={formData.commission}
                       onChange={handleChange}
                       className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1036,44 +728,6 @@ export default function OnboardingForm() {
                     className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-
-                <div className="border-t pt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Onboarding Status</label>
-                  <div className="space-y-2">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        name="onboardingChecks.addedToSlack"
-                        checked={formData.onboardingChecks.addedToSlack}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <span className="text-sm text-gray-700">Added to Slack</span>
-                    </label>
-
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        name="onboardingChecks.addedToMonday"
-                        checked={formData.onboardingChecks.addedToMonday}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <span className="text-sm text-gray-700">Added to Monday</span>
-                    </label>
-
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        name="onboardingChecks.teamIntro"
-                        checked={formData.onboardingChecks.teamIntro}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <span className="text-sm text-gray-700">Introduced to Team</span>
-                    </label>
-                  </div>
-                </div>
               </div>
             </section>
 
@@ -1197,6 +851,18 @@ export default function OnboardingForm() {
                     className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Loss Tolerance</label>
+                  <input
+                    type="text"
+                    name="lossTolerance.lifetime"
+                    placeholder="e.g. Lifetime Total Loss of $2,000"
+                    value={formData.lossTolerance.lifetime}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
+                  />
+                </div>
               </div>
             </section>
 
@@ -1260,159 +926,136 @@ export default function OnboardingForm() {
               <h3 className="text-xl font-semibold text-gray-800 border-l-4 border-red-600 pl-3">MEDIA BUYER CONTRACTOR AGREEMENT</h3>
               
               <div className="prose prose-sm max-w-none">
-                <div className="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto mb-4 border">
-                  <p className="font-semibold">Effective Date: Immediately</p>
-                  
-                  {formData.name && (
-                    <p className="font-medium mb-4">Contractor Name: {formData.name}</p>
-                  )}
+                <div className="bg-gray-50 p-4 rounded-lg mb-4 border">
+                  <div className="markdown-content">
+                    <h1>INDEPENDENT CONTRACTOR AGREEMENT</h1>
+                    <p>(Media Buyer -- 30-Day Profit Share)</p>
 
-                  <p className="mb-4"><strong>Introduction</strong><br />
-                  This Code of Conduct sets forth the professional standards, ethical guidelines, and business practices expected from all media buyers contracted by Convert 2 Freedom LLC. As key players in our lead generation business, media buyers are expected to adhere to these standards to maintain the integrity and reputation of our company and to ensure optimal performance and compliance in all lead generation activities.</p>
+                    <p>This Independent Contractor Agreement ("Agreement") is entered into as of the date of signing below by and between:</p>
 
-                  <h4 className="font-semibold mt-4">1. Professional Integrity</h4>
-                  <p>1.1 Accuracy and Transparency: Media buyers must ensure that all data related to lead generation, including the quality, source, and targeting criteria, are accurate and transparent. Any misrepresentation of leads or traffic sources is strictly prohibited.</p>
-                  <p>1.2 Lead Quality: Contractors must focus on acquiring high-quality leads that meet the predefined criteria set by the company. Misleading or deceptive practices to generate leads are not tolerated.</p>
+                    <p>Company: Convert 2 Freedom LLC ("Company")<br />
+                    Contractor: {formData.name || "____________________"} ("Media Buyer")</p>
 
-                  <h4 className="font-semibold mt-4">2. Compliance with Laws and Regulations</h4>
-                  <p>2.1 Adherence to Lead Generation Standards: All lead generation activities must comply with relevant laws, regulations, and industry standards, including, but not limited to, CAN-SPAM, TCPA, GDPR, and CCPA, depending on the location and nature of the leads generated.</p>
-                  <p>2.2 Prohibited Practices: The use of clickbait, misleading advertisements, or false claims to generate leads is strictly prohibited. Contractors must not use any illegal or unethical tactics that could harm the reputation of the company or its clients.</p>
+                    <p>Collectively referred to as the "Parties."</p>
 
-                  <h4 className="font-semibold mt-4">3. Confidentiality</h4>
-                  <p>3.1 Protection of Confidential Information: Contractors must keep all information regarding lead generation strategies, sources, pricing, creatives and client information confidential.</p>
-                  <p>3.2 Non-Disclosure: Contractors are prohibited from sharing any confidential or proprietary information related to lead generation activities with third parties without the express written consent of the company.</p>
+                    <h2>1.0 Scope of Work</h2>
+                    <p>The Media Buyer agrees to provide media buying and advertising services for the Company, including but not limited to launching, managing, optimizing, and reporting on advertising campaigns as directed by the Company.</p>
 
-                  <h4 className="font-semibold mt-4">4. Ethical Conduct</h4>
-                  <p>4.1 Transparency in Traffic Sources: Contractors are required to disclose all asset sources used for lead generation and ensure they comply with the company's approved methods and quality standards. Media buyers are responsible for ensuring that the Convert2Freedom Management Team is fully informed of all creatives used to drive traffic. Any use of grey or black hat tactics must be discussed with Management prior to implementation.</p>
-                  <p>4.2 Avoiding Conflicts of Interest: Contractors must avoid any activities that could result in a conflict of interest with the company or its associated networks. Any potential conflicts must be disclosed to the company immediately. For example, directing traffic to networks or offers affiliated with Convert2Freedom LLC for personal gain, without prior written notification to Nick Torson or Dan Mattson, would be considered a conflict of interest.</p>
+                    <h2>2.0 Term</h2>
+                    <p>This Agreement shall commence on the date of signing and shall remain in effect for an initial term of 30 calendar days, unless terminated earlier by either party with written notice.</p>
 
-                  <h4 className="font-semibold mt-4">5. Use of Company Resources</h4>
-                  <p>5.1 Appropriate Use: Contractors are expected to use company-provided tools, platforms, and resources solely for the purposes of fulfilling their contractual obligations related to lead generation.</p>
-                  <p>5.2 Data Security: Contractors must take appropriate measures to safeguard all data and digital resources provided by the company, including using secure networks, maintaining confidentiality, and following data protection best practices.</p>
+                    <h2>3.0 Compensation</h2>
+                    <p>3.1 For the first 30 days of this Agreement, the Media Buyer shall receive no base salary.</p>
+                    <p>3.2 Instead, the Media Buyer shall be compensated with 10% of net profits generated directly from the advertising campaigns they manage.</p>
+                    <p>3.3 "Net Profits" is defined as the gross revenue from advertising campaigns managed by the Media Buyer, minus ad spend and direct campaign-related expenses.</p>
 
-                  <h4 className="font-semibold mt-4">6. Lead Quality and Compliance</h4>
-                  <p>6.1 Quality Assurance: Contractors must ensure that all leads generated meet the quality standards and criteria specified by the company. Leads should be genuine, verifiable, and relevant to the specified target audience.</p>
-                  <p>6.2 Compliance with Lead Requirements: Contractors must adhere to all requirements regarding lead generation practices, including consent for communication, data protection regulations, and any other legal obligations related to the generation and sale of leads.</p>
+                    <h2>4.0 Independent Contractor Status</h2>
+                    <p>4.1 The Media Buyer is engaged as an independent contractor. Nothing in this Agreement shall be construed as creating an employer-employee relationship, a partnership, or a joint venture between the Parties.</p>
+                    <p>4.2 The Company shall not be responsible for withholding taxes or providing any employee benefits to the Media Buyer.</p>
 
-                  <h4 className="font-semibold mt-4">7. Communication and Collaboration</h4>
-                  <p>7.1 Professional Communication: Contractors must maintain clear, professional, and timely communication with company representatives and network partners regarding lead generation activities, performance metrics, and any issues that arise.</p>
-                  <p>7.2 Responsiveness: Contractors are expected to promptly respond to all communications and inquiries from the company and networks, particularly those related to lead quality, campaign performance, and compliance matters.</p>
-                  <p>7.3 Meeting Attendance: Contractors are required to attend all scheduled Media Buyer Calls and participate in at least one one-on-one call with management each week, unless an alternative arrangement has been agreed upon in advance.</p>
-                  <p>7.4 End of Day Reporting: Contractors must submit an End of Day Report (template provided on Monday.com) that includes ad revenue, ad spend, and profit for each ad account they manage. This report must be submitted by 6am PST the following day. Accuracy is essential, as it directly impacts commission payouts.</p>
-                  <p>7.5 Daily Updates: Contractors are required to post their plan for the upcoming day in the daily-updates Slack channel. This update should include a review of the current day's performance and a detailed plan for the following day. It must be submitted before midnight each day.</p>
-                  <p>7.6 Commitment: If a contractor is assigned resources such as ad accounts, pixels, creatives, or offers, these must be activated within 24 hours. If activation is not possible, the contractor must communicate a plan to the Convert2Freedom Management Team.</p>
+                    <h2>5.0 Confidentiality</h2>
+                    <p>The Media Buyer agrees to maintain the confidentiality of all business strategies, advertising data, intellectual property, and any sensitive information related to the Company and its clients, during and after the term of this Agreement.</p>
 
-                  <h4 className="font-semibold mt-4">8. Compliance and Reporting</h4>
-                  <p>8.1 Compliance with Company Policies: Contractors must adhere to all company policies, including this Code of Conduct, and report any violations or unethical behavior they observe.</p>
-                  <p>8.2 Reporting Misconduct: Contractors should promptly report any breaches of this Code of Conduct, suspicious activity, or unethical behavior to their designated company contact.</p>
+                    <h2>6.0 Termination</h2>
+                    <p>Either party may terminate this Agreement at any time with written notice. Upon termination, the Media Buyer shall be entitled to any earned compensation as outlined in Section 3, up to the date of termination.</p>
 
-                  <h4 className="font-semibold mt-4">9. Consequences of Non-Compliance</h4>
-                  <p>Violations of this Code of Conduct may result in disciplinary action, including termination of the contractor's agreement, legal action, or other appropriate measures as deemed necessary by the company.</p>
+                    <h2>7.0 Post-Term Review</h2>
+                    <p>At the conclusion of the 30-day term, the Parties agree to re-evaluate performance and results, and to discuss a potential continuation or restructuring of the working relationship, including any updates to compensation, responsibilities, or terms of engagement.</p>
 
-                  <h4 className="font-semibold mt-4">10. Non-Compete Clause</h4>
-                  <p>10.1 Non-Compete Agreement: Contractors agree that during the term of their engagement with Convert2Freedom LLC and for a period of 12 months following the termination or conclusion of their contract, they will not directly or indirectly engage in any business or provide services that compete with the lead generation activities or related services offered by Convert2Freedom LLC. This includes, but is not limited to, generating leads for companies, networks or affiliates that have a relationship with or are in direct competition with Convert2Freedom LLC.</p>
-                  <p>10.2 Scope of Non-Compete: The non-compete agreement applies to all geographical areas where Convert2Freedom LLC operates or conducts business. Contractors are prohibited from using any knowledge, strategies, or contacts acquired during their time with Convert2Freedom LLC to benefit a competitor.</p>
-                  <p>10.3 Non-Solicitation: Contractors agree not to solicit or attempt to solicit, directly or indirectly, any clients, partners, networks, affiliates or employees of Convert2Freedom LLC for the purpose of diverting business or talent away from the company.</p>
-                  <p>10.4 Breach of Non-Compete: Any violation of this non-compete clause will result in legal action and may include, but is not limited to, financial damages, injunctive relief, and termination of any outstanding agreements with the contractor.</p>
+                    <h2>8.0 Governing Law</h2>
+                    <p>This Agreement shall be governed by and interpreted in accordance with the laws of the state/province/country in which the Company is registered.</p>
 
-                  <h4 className="font-semibold mt-4">11. Acknowledgment</h4>
-                  <p>All contractors must acknowledge that they have read, understood, and agree to abide by this Code of Conduct. Contractors are encouraged to seek clarification on any aspect of this code if needed.</p>
-
-                  <div className="mt-6">
-                    <p className="font-semibold">Contractor Acknowledgment:</p>
-                    <p>I, <span className="font-medium underline">{formData.name || "_________________________________"}</span>, have read and understood the Media Buyer Code of Conduct for Contractors, and I agree to comply with all the guidelines, policies, and standards outlined herein.</p>
-                  </div>
-
-                  <div className="mt-8 border-t pt-4">
-                    <p className="font-semibold mb-4">Convert 2 Freedom LLC Representative:</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                        <input
-                          type="text"
-                          value={c2fSignature.name}
-                          className="w-full p-2 border rounded bg-gray-50"
-                          readOnly
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
-                        <input
-                          type="text"
-                          value={c2fSignature.position}
-                          className="w-full p-2 border rounded bg-gray-50"
-                          readOnly
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                        <input
-                          type="date"
-                          value={c2fSignature.date}
-                          className="w-full p-2 border rounded bg-gray-50"
-                          readOnly
-                        />
-                      </div>
-                    </div>
+                    <h2>9.0 Contractor Commitment and Transparency</h2>
+                    <p>9.1 The Contractor agrees to a full-time role with the Company. If the Contractor currently engages in part-time work, intends to work part-time elsewhere, or plans to run their own advertising campaigns, they are required to disclose this and discuss it with the Company. Transparency is expected at all times regarding work activities and future intentions. The Company reserves the right to evaluate and determine whether such arrangements conflict with the expectations of a full-time commitment.</p>
                   </div>
                 </div>
               </div>
+            </section>
 
-              <div className="space-y-4 border-t pt-4">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    name="contractorAgreement.hasRead"
-                    checked={formData.contractorAgreement.hasRead}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    required
-                  />
-                  <span className="text-sm text-gray-700">
-                    I have read and understood the Media Buyer Code of Conduct for Contractors *
-                  </span>
-                </label>
+            {/* Appendix A Section */}
+            <section className="space-y-4">
+              <h3 className="text-xl font-semibold text-gray-800 border-l-4 border-red-600 pl-3">APPENDIX A: PRICING AND COMPENSATION GUIDELINES</h3>
+              
+              <div className="prose prose-sm max-w-none">
+                <div className="bg-gray-50 p-4 rounded-lg mb-4 border">
+                  <div className="markdown-content">
+                    <h2>1.0 Definitions</h2>
+                    <p>1.1 Contractor Gross Revenue: Revenue received before taxes and deductions as a direct result of Contractor Services.</p>
 
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    name="compliance"
-                    checked={formData.compliance}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    required
-                  />
-                  <span className="text-sm text-gray-700">
-                    I agree to comply with all network advertising policies and regulations *
-                  </span>
-                </label>
+                    <h2>2.0 Compensation</h2>
+                    <p>2.1 Contractor will work 40 hours per week for a flat rate salary of $
+                      <input
+                        type="text"
+                        name="monthlySalary"
+                        value={formData.monthlySalary}
+                        onChange={handleChange}
+                        className="w-20 p-1 border rounded inline-block focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      /> USD monthly.</p>
+                    <p>2.2 Contractor will also be paid commission on profit earned by the media buyer according to the following breakdown:</p>
+                    <p>$0 -- $100,000 = 15%<br />
+                    $100,001 -- $250,000 = 20%<br />
+                    $250,001 and above = 30%</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Digital Signature *</label>
-                    <input
-                      type="text"
-                      name="contractorAgreement.signature"
-                      placeholder="Type your full name"
-                      value={formData.contractorAgreement.signature}
-                      onChange={handleChange}
-                      className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    />
+                    <h2>3.0 Tax Treatment of Contractor Payment</h2>
+                    <p>3.1 The Company shall not be responsible for federal, state, local, or foreign taxes derived from the Contractor's net income or for the withholding and/or payment of any federal, state, local, or foreign income and other payroll taxes, workers' compensation, disability benefits, or other legal requirements applicable to the Contractor.</p>
+
+                    <h2>4.0 Contractor Commitment and Transparency</h2>
+                    <p>4.1 The Contractor agrees to a full-time role with the Company. If the Contractor currently engages in part-time work, intends to work part-time elsewhere, or plans to run their own advertising campaigns, they are required to disclose this and discuss it with the Company. Transparency is expected at all times regarding work activities and future intentions. The Company reserves the right to evaluate and determine whether such arrangements conflict with the expectations of a full-time commitment.</p>
                   </div>
+                </div>
+              </div>
+            </section>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                    <input
-                      type="date"
-                      name="contractorAgreement.date"
-                      value={formData.contractorAgreement.date}
-                      onChange={handleChange}
-                      className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      readOnly
-                    />
+            {/* Final Signatures Section */}
+            <section className="space-y-4">
+              <h3 className="text-xl font-semibold text-gray-800 border-l-4 border-red-600 pl-3">Agreement Signatures</h3>
+              
+              <div className="prose prose-sm max-w-none">
+                <div className="bg-gray-50 p-4 rounded-lg mb-4 border">
+                  <div className="markdown-content">
+                    <p className="text-lg font-semibold mb-6">IN WITNESS WHEREOF, the parties have executed this Agreement as of the date written below.</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Company Representative */}
+                      <div className="space-y-2">
+                        <p className="font-medium">Company Representative:</p>
+                        <p className="ml-4">Name: Nick Torson</p>
+                        <p className="ml-4">Title: CEO</p>
+                        <div className="ml-4">
+                          <p>Signature:</p>
+                          <input
+                            type="text"
+                            name="c2fSignature.signature"
+                            placeholder="Type your full name"
+                            value={c2fSignature.signature}
+                            onChange={(e) => setC2fSignature({...c2fSignature, signature: e.target.value})}
+                            className="mt-1 w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                          />
+                        </div>
+                        <p className="ml-4">Date: 24/03/2025</p>
+                      </div>
+
+                      {/* Media Buyer Signature */}
+                      <div className="space-y-2">
+                        <p className="font-medium">Media Buyer (Contractor):</p>
+                        <p className="ml-4">Name: {formData.name || "____________________"}</p>
+                        <p className="ml-4">Title: Freelance Media Buyer</p>
+                        <div className="ml-4">
+                          <p>Signature:</p>
+                          <input
+                            type="text"
+                            name="contractorAgreement.signature"
+                            placeholder="Type your full name"
+                            value={formData.contractorAgreement.signature}
+                            onChange={handleChange}
+                            className="mt-1 w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                          />
+                        </div>
+                        <p className="ml-4">Date: 24/03/2025</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1421,17 +1064,15 @@ export default function OnboardingForm() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={status.loading || !formData.contractorAgreement.hasRead}
+              disabled={status.loading}
               className={`w-full p-3 rounded text-white font-medium
-                ${(status.loading || !formData.contractorAgreement.hasRead)
+                ${(status.loading)
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-red-600 hover:bg-red-700 transition-colors'}`}
             >
               {status.loading ? 'Submitting...' : 'Submit'}
             </button>
           </form>
-
-          {showDraftsModal && <DraftsModal />}
         </div>
       </div>
     </div>
