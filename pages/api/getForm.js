@@ -10,20 +10,22 @@ export default async function handler(req, res) {
     await dbConnect();
     
     const { formId } = req.query;
-    console.log('Searching for form with ID:', formId); // Debug log
+    console.log('Fetching form with ID:', formId);
 
     const form = await Form.findOne({ formId });
-    console.log('Form found:', form ? 'Yes' : 'No'); // Debug log
     
     if (!form) {
+      console.log('Form not found:', formId);
       return res.status(404).json({ message: 'Form not found' });
     }
 
     // Check if form has expired
     if (form.expiresAt < new Date()) {
+      console.log('Form expired:', formId);
       return res.status(400).json({ message: 'This signature link has expired' });
     }
 
+    console.log('Form found:', formId);
     res.status(200).json(form);
   } catch (error) {
     console.error('Get form error:', error);

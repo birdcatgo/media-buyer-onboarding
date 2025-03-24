@@ -15,28 +15,23 @@ export default function SignaturePage() {
     async function fetchForm() {
       if (!formId) return;
 
-      setLoading(true);
-      setError(null);
-
       try {
-        console.log('Fetching form with ID:', formId); // Debug log
+        console.log('Fetching form:', formId);
         const response = await fetch(`/api/getForm?formId=${formId}`);
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to fetch form');
-        }
-        
         const data = await response.json();
-        console.log('Form data received:', data); // Debug log
-        if (data.status === 'completed') {
-          setError('This contract has already been signed');
-          return;
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch form');
         }
-        
+
+        if (data.status === 'completed') {
+          throw new Error('This contract has already been signed');
+        }
+
+        console.log('Form data received:', data);
         setFormData(data);
       } catch (err) {
-        console.error('Error fetching form:', err); // Debug log
+        console.error('Error fetching form:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -71,8 +66,12 @@ export default function SignaturePage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to sign contract');
-      
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to sign contract');
+      }
+
       setSuccess(true);
     } catch (err) {
       setError(err.message);
@@ -123,11 +122,11 @@ export default function SignaturePage() {
             {/* Display Contract Details */}
             <div className="mb-8 prose prose-sm max-w-none">
               <div className="bg-gray-50 p-4 rounded-lg">
-                {/* Display the contract content */}
                 <h2>Contract Details</h2>
                 <p>Name: {formData?.formData?.name}</p>
                 <p>Email: {formData?.formData?.email}</p>
-                {/* Add other relevant contract details */}
+                <p>Start Date: {formData?.formData?.contractDetails?.startDate}</p>
+                <p>Commission: {formData?.formData?.commission}</p>
               </div>
             </div>
 
