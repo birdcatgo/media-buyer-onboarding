@@ -1,7 +1,92 @@
 import dbConnect from '../../lib/mongodb';
 import Form from '../../models/Form';
 import sgMail from '@sendgrid/mail';
-import html_to_pdf from 'html-pdf-node';
+import { jsPDF } from 'jspdf';
+
+// Backup PDF generation function using plain text
+const generateBackupPDF = (form, signature, date) => {
+  try {
+    const doc = new jsPDF();
+    
+    // Simple text-based layout with minimal formatting
+    doc.setFontSize(12);
+    
+    const content = [
+      'MEDIA BUYER CONTRACT',
+      'Convert 2 Freedom',
+      '',
+      'CONTRACTOR INFORMATION',
+      `Name: ${form.formData.name}`,
+      `Email: ${form.formData.email}`,
+      `Start Date: ${form.formData.contractDetails?.startDate || date}`,
+      `Commission: ${form.formData.commission}`,
+      '',
+      'CONTRACT TERMS',
+      form.formData.contractTerms || '',
+      '',
+      'SIGNATURES',
+      `Contractor: ${signature}`,
+      `Date: ${date}`,
+      '',
+      'Convert 2 Freedom Representative: Nick Torson',
+      `Date: ${form.formData.c2fSignatureDate || date}`
+    ];
+
+    let y = 20;
+    content.forEach(line => {
+      if (y > 280) { // Check if we need a new page
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, 20, y);
+      y += 10;
+    });
+
+    return doc.output('base64');
+  } catch (error) {
+    console.error('Backup PDF generation failed:', error);
+    throw error;
+  }
+};
+
+// Primary PDF generation function
+const generatePrimaryPDF = (form, signature, date) => {
+  try {
+    const doc = new jsPDF();
+    
+    // Add content to PDF with proper formatting
+    doc.setFontSize(20);
+    doc.text('Media Buyer Contract', 105, 20, { align: 'center' });
+    doc.setFontSize(16);
+    doc.text('Convert 2 Freedom', 105, 30, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.text('Contractor Information', 20, 50);
+    doc.text(`Name: ${form.formData.name}`, 20, 60);
+    doc.text(`Email: ${form.formData.email}`, 20, 70);
+    doc.text(`Start Date: ${form.formData.contractDetails?.startDate || date}`, 20, 80);
+    doc.text(`Commission: ${form.formData.commission}`, 20, 90);
+
+    doc.text('Contract Terms', 20, 110);
+    const terms = doc.splitTextToSize(form.formData.contractTerms || '', 170);
+    doc.text(terms, 20, 120);
+
+    // Add signatures at the bottom
+    doc.text('Signatures', 20, 220);
+    doc.line(20, 225, 190, 225);
+    
+    doc.text(`Contractor Signature: ${signature}`, 20, 235);
+    doc.text(`Date Signed: ${date}`, 20, 245);
+    
+    doc.text('Convert 2 Freedom Representative: Nick Torson', 20, 260);
+    doc.text(`Date: ${form.formData.c2fSignatureDate || date}`, 20, 270);
+
+    return doc.output('base64');
+  } catch (error) {
+    console.error('Primary PDF generation failed:', error);
+    throw error;
+  }
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -41,78 +126,22 @@ export default async function handler(req, res) {
       throw new Error('Failed to update form in database');
     }
 
-    // Generate PDF
+    // Generate PDF with fallback
     console.log('Starting PDF generation');
-    const contractHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          body { 
-            font-family: Arial, sans-serif; 
-            line-height: 1.6; 
-            padding: 40px;
-            max-width: 800px;
-            margin: 0 auto;
-          }
-          .header { 
-            text-align: center; 
-            margin-bottom: 30px;
-            border-bottom: 2px solid #333;
-            padding-bottom: 20px;
-          }
-          .section { 
-            margin-bottom: 20px;
-          }
-          .signature { 
-            margin-top: 40px;
-            border-top: 1px solid #000;
-            padding-top: 10px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Media Buyer Contract</h1>
-          <h2>Convert 2 Freedom</h2>
-        </div>
-
-        <div class="section">
-          <h3>Contractor Information</h3>
-          <p><strong>Name:</strong> ${form.formData.name}</p>
-          <p><strong>Email:</strong> ${form.formData.email}</p>
-          <p><strong>Start Date:</strong> ${form.formData.contractDetails?.startDate || date}</p>
-          <p><strong>Commission:</strong> ${form.formData.commission}</p>
-        </div>
-
-        <div class="section">
-          <h3>Contract Terms</h3>
-          ${form.formData.contractTerms || ''}
-        </div>
-
-        <div class="signature">
-          <p><strong>Contractor Signature:</strong> ${signature}</p>
-          <p><strong>Date Signed:</strong> ${date}</p>
-        </div>
-
-        <div class="signature">
-          <p><strong>Convert 2 Freedom Representative:</strong> Nick Torson</p>
-          <p><strong>Date:</strong> ${form.formData.c2fSignatureDate || date}</p>
-        </div>
-      </body>
-      </html>
-    `;
-
-    const options = { format: 'A4' };
-    const file = { content: contractHtml };
-    
-    const pdfBuffer = await html_to_pdf.generatePdf(file, options);
-    console.log('PDF generated');
-
-    // Convert PDF buffer to base64
-    const pdfBase64 = pdfBuffer.toString('base64');
-    console.log('PDF converted to base64');
+    let pdfBase64;
+    try {
+      pdfBase64 = await generatePrimaryPDF(form, signature, date);
+      console.log('Primary PDF generation successful');
+    } catch (pdfError) {
+      console.error('Primary PDF generation failed, trying backup method:', pdfError);
+      try {
+        pdfBase64 = await generateBackupPDF(form, signature, date);
+        console.log('Backup PDF generation successful');
+      } catch (backupError) {
+        console.error('Backup PDF generation failed:', backupError);
+        throw new Error('Failed to generate PDF using both primary and backup methods');
+      }
+    }
 
     // Send confirmation emails with PDF attachment
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -163,7 +192,7 @@ export default async function handler(req, res) {
         console.log('Email sent successfully to:', email.to);
       } catch (emailError) {
         console.error('Email send error:', emailError);
-        throw new Error(`Failed to send email to ${email.to}`);
+        throw new Error(`Failed to send email to ${email.to}: ${emailError.message}`);
       }
     }
 
